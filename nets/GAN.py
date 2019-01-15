@@ -135,7 +135,7 @@ class GAN(object):
 			self.D = self.D.cuda()
 			self.BCE_loss = nn.BCELoss().cuda() #BCELoss : Binary Cross Entropy Loss
 		else:
-			self.BEC_loss = nn.BECLoss()
+			self.BCE_loss = nn.BECLoss()
 	
 
 	def train(self):
@@ -234,20 +234,20 @@ class GAN(object):
 
 		tot_num_samples = min(self.sample_num, self.batch_size)
 		image_frame_dim = int(np.floor(np.sqrt(tot_num_samples)))
-
+		
 		if fix:
 			""" fixed noise """
 			samples = self.G(z_)
 		
 		if self.gpu_mode:
 			samples = samples.cpu().data.numpy().transpose(0, 2, 3, 1)
-			gt = y.cpu().data.numpy().transpose(0, 2, 3, 1)
+			#gt = y.cpu().data.numpy().transpose(0, 2, 3, 1)
 		else:
 			samples = samples.data.numpy().transpose(0, 2, 3, 1)
-			gt = y.data.numpy().transpose(0, 2, 3, 1)
+			#gt = y.data.numpy().transpose(0, 2, 3, 1)
 
 		utils.save_images(samples[:image_frame_dim*image_frame_dim,:,:,:], [image_frame_dim, image_frame_dim], self.result_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_epoch%03d'%epoch+'_F.png')
-		utils.save_images(gt[:image_frame_dim*image_frame_dim,:,:,:], [image_frame_dim, image_frame_dim], self.result_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_epoch%03d'%epoch+'_R.png')
+		#utils.save_images(gt[:image_frame_dim*image_frame_dim,:,:,:], [image_frame_dim, image_frame_dim], self.result_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_epoch%03d'%epoch+'_R.png')
 
 
 	def save(self):

@@ -101,7 +101,7 @@ class DiracGAN(object):
 		self.beta2 = args.beta2
 		self.lrG = args.lrG
 		self.lrD = args.lrD
-		self.resl = 64
+		self.resl = 32
 
 
 		#load dataset	
@@ -135,7 +135,7 @@ class DiracGAN(object):
 			self.D = self.D.cuda()
 			self.BCE_loss = nn.BCELoss().cuda() #BCELoss : Binary Cross Entropy Loss
 		else:
-			self.BEC_loss = nn.BECLoss()
+			self.BCE_loss = nn.BECLoss()
 	
 
 	def train(self):
@@ -203,20 +203,21 @@ class DiracGAN(object):
 				# ***only for train very well***#	
 		
 				#----Update G_network----#
+				for itr in range(3):
+					self.G_optimizer.zero_grad()	
+					G_ = self.G(z_)
+					D_fake = self.D(G_)
+					G_loss = self.BCE_loss(D_fake, self.y_real_)
+					if itr%3 ==0:	
+						self.train_hist['G_loss'].append(G_loss.data[0])
+					G_loss.backward()
+					self.G_optimizer.step()
 
-				self.G_optimizer.zero_grad()	
-				G_ = self.G(z_)
-				D_fake = self.D(G_)
-				G_loss = self.BCE_loss(D_fake, self.y_real_)
-
-				self.train_hist['G_loss'].append(G_loss.data[0])
-				G_loss.backward()
-				self.G_optimizer.step()
 
 				#---check train result ----#
 				if(iB % 100 == 0) and (epoch%1==0):
 					print('[E%03d]'%(epoch)+'  G_loss :  %.6f '%(G_loss.data[0])+'  D_loss :  %.6f = %.6f + %.6f'%(D_loss.data[0], D_fake_loss.data[0], D_real_loss.data[0]))
-					self.visualize_results(epoch, z_)
+					self.visualize_results(epoch, z_, img_)
 					self.G.train()
 			
 			#self.visualize_results(epoch, self.z)
@@ -230,14 +231,14 @@ class DiracGAN(object):
 
 
 
-	def visualize_results(self, epoch, z_, fix=True):
+	def visualize_results(self, epoch, z_, y, fix=True):
 		self.G.eval()
 		if not os.path.exists(self.result_dir + '/' + self.dataset + '/' + self.model_name):
 			os.makedirs(self.result_dir + '/' + self.dataset + '/' + self.model_name)
 
 		tot_num_samples = min(self.sample_num, self.batch_size)
 		image_frame_dim = int(np.floor(np.sqrt(tot_num_samples)))
-
+		
 		if fix:
 			""" fixed noise """
 			samples = self.G(z_)
