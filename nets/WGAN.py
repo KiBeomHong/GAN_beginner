@@ -227,6 +227,7 @@ class WGAN(object):
 					D_loss = D_fake_loss + D_real_loss
 
 				self.train_hist['D_loss'].append(D_loss.data[0])
+				D_loss.backward()
 				self.D_optimizer.step()
 				
 
