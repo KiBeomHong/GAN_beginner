@@ -84,10 +84,10 @@ class CNN(object):
 
 		self.train_loader = DataLoader(dataset, batch_size = self.batch_size, shuffle=True, num_workers = self.num_workers)
 
-		#construct model G & D
+		#construct model 
 		self.net = Net(self.data_dim)
 
-		#define optimizer for G & D
+		#define optimizer
 		self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr, betas=(self.beta1, self.beta2))
 
 		if self.gpu_mode:
