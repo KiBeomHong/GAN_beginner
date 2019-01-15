@@ -12,24 +12,26 @@ from nets.utils import Flatten
 import pdb
 
 class Gen(nn.Module):
-	def __init__(self):
+	def __init__(self, output_dim):
 		super(Gen, self).__init__()
 		self.input_dim = 100
-		self.output_dim = 3
-
-		self.fc = nn.Sequential(
-			nn.Linear(self.input_dim, 1024),
-			nn.BatchNorm1d(1024),
-			nn.ReLU(),
-			nn.Linear(1024, 128*16*16),
-			nn.BatchNorm1d(128*16*16),
-			nn.ReLU(),
-		)
+		self.output_dim = output_dim
 
 		self.deconv = nn.Sequential(
-			#16*16 -> 8*8 -> 16*16
+			# 1 -> 4
+			nn.Conv2d(100, 256, 4, 1, 3, bias=False),
+			nn.BatchNorm2d(256),
+			nn.ReLU(),
+
+			# 4 -> 8
 			nn.Upsample(scale_factor=2, mode='nearest'),
-			nn.Conv2d(128, 64, 4, 2, 1, bias=False),
+			nn.Conv2d(256, 128, 3, 1, 1, bias=False),
+			nn.BatchNorm2d(128),
+			nn.ReLU(),
+
+			# 8 -> 16
+			nn.Upsample(scale_factor=2, mode='nearest'),
+			nn.Conv2d(128, 64, 3, 1, 1, bias=False),
 			nn.BatchNorm2d(64),
 			nn.ReLU(),
 
@@ -49,28 +51,43 @@ class Gen(nn.Module):
 		utils.initialize_weights(self)
 
 	def forward(self, z):
-		x = self.fc(z)
-		x = x.view(-1, 128, 16, 16)
+		x = z.view(-1, self.input_dim, 1, 1)
 		x = self.deconv(x)
-		
 		return x
 
+
+
 class Dis(nn.Module):
-	def __init__(self):
+	def __init__(self, input_dim):
 		super(Dis, self).__init__()
-		self.input_dim = 3
-		self.output_dim  = 1
+		self.input_dim = input_dim
+		self.output_dim  = 1 # Real or Fake
 
 		self.conv = nn.Sequential(
-			nn.Conv2d(self.input_dim, 64, 4 ,2 ,1),
+			# 64 -> 32
+			nn.Conv2d(self.input_dim, 32, 4, 2, 1, bias=False),
+			nn.BatchNorm2d(32),
 			nn.LeakyReLU(0.2),
-			nn.Conv2d(64, 128, 4, 2, 1),
+
+			# 32 ->16
+			nn.Conv2d(32, 64, 4, 2, 1, bias=False),
+			nn.BatchNorm2d(64),
+			nn.LeakyReLU(0.2),
+
+			# 16 -> 8
+			nn.Conv2d(64, 128, 4, 2, 1, bias=False),
 			nn.BatchNorm2d(128),
 			nn.LeakyReLU(0.2),
+
+			# 8 -> 4 : So output is 256*4*4
+			nn.Conv2d(128, 256, 4, 2, 1, bias=False),
+			nn.BatchNorm2d(256),
+			nn.LeakyReLU(0.2),
+
 		)
 
 		self.fc = nn.Sequential(
-			nn.Linear(128*16*16, 1024),
+			nn.Linear(256*4*4, 1024),
 			nn.BatchNorm1d(1024),
 			nn.LeakyReLU(0.2),
 			nn.Linear(1024, self.output_dim),
@@ -79,7 +96,7 @@ class Dis(nn.Module):
 	
 	def forward(self, input):
 		x = self.conv(input)
-		x = x.view(-1, 128*16*16)
+		x = x.view(-1, 256*4*4)
 		x = self.fc(x)
 
 		return x
@@ -88,14 +105,15 @@ class Dis(nn.Module):
 
 class WGAN(object):
 	def __init__(self, args):
+		
 		#parameters
 		self.batch_size = args.batch_size
 		self.epoch = args.epoch
 		self.save_dir = args.save_dir
 		self.result_dir = args.result_dir
 		self.dataset = args.dataset
-		self.dataroot_Img_dir = args.dataroot_dir
-		self.model_name = args.gan_type + args.comment
+		self.dataroot_dir = args.dataroot_dir
+		self.model_name = args.model_type + args.comment
 		self.sample_num = args.sample_num
 		self.gpu_mode = args.gpu_mode
 		self.num_workers = args.num_workers
@@ -104,15 +122,32 @@ class WGAN(object):
 		self.lrG = args.lrG
 		self.lrD = args.lrD
 		self.resl = 64
+		
+		self.lambda_ = 0.25
 		self.use_gp = True # True : WGAN_GP / False: WGAN
 
-
 		#load dataset	
-		self.train_loader = DataLoader(utils.CUB(root_dir = '/media/sunny/b98f42f1-1582-4e30-bfd4-d7f27abe9ea1/data/CUB/CUB_200_2011/CUB_200_2011/images/',transform=transforms.Compose([transforms.CenterCrop(160), transforms.Scale(64), transforms.ToTensor()])), batch_size = self.batch_size, shuffle=True)
+		transform = transforms.Compose([transforms.Resize(self.resl),transforms.ToTensor(),transforms.Normalize((0.1307,),(0.3081,))])
+
+		if not os.path.exists(os.path.join(self.dataroot_dir,self.dataset)):
+			os.makedirs(os.path.join(self.dataroot_dir,self.dataset))
+
+		data_path = os.path.join(self.dataroot_dir,self.dataset)
+
+		if self.dataset == 'cifar10':
+			dataset = datasets.CIFAR10(root=data_path, train=True, download=True, transform=transform)
+			self.data_dim = 3
+
+		elif self.dataset == 'mnist':
+			dataset = datasets.MNIST(root=data_path, train=True, download=True, transform=transform)
+			self.data_dim = 1
+
+		self.train_loader = DataLoader(dataset, batch_size = self.batch_size, shuffle=True, num_workers = self.num_workers)
 
 		#construct model G & D
-		self.G = Gen()
-		self.D = Dis()
+		self.G = Gen(self.data_dim)
+		self.D = Dis(self.data_dim)
+
 
 		#define optimizer for G & D
 		self.G_optimizer = optim.Adam(self.G.parameters(), lr=self.lrG, betas=(self.beta1, self.beta2))
@@ -147,7 +182,8 @@ class WGAN(object):
 		for epoch in range(self.epoch):
 			self.G.train()
 			epoch_start_time = time.time()
-			for iB, img_ in enumerate(self.train_loader):
+
+			for iB, (img_, label_) in enumerate(self.train_loader):
 				if iB == self.train_loader.dataset.__len__() // self.batch_size:
 					break
 
@@ -198,18 +234,21 @@ class WGAN(object):
 				self.G_optimizer.zero_grad()	
 				G_ = self.G(z_)
 				D_fake = self.D(G_)
-				G_fake_loss = -torch.mean(D_fake)
-				G_loss = G_fake_loss
+				
+				G_loss = -torch.mean(D_fake)
+				
 				self.train_hist['G_loss'].append(G_loss.data[0])
+				
 				G_loss.backward()
 				self.G_optimizer.step()
 
 				#---check train result ----#
-				if(iB % 100 == 0) and (epoch%10==0):
-					print('[E%03d]'%(epoch)+'  G_loss :  %.6f '%(G_loss.data[0])+'  D_loss :  %.6f = %.6f + %.6f'%(D_loss.data[0], D_fake_loss.data[0], D_real_loss.data[0])+'   D_acc : %.6f'%D_acc)
-					self.visualize_results(epoch, z_, img_, iB)
-					self.G.train()
+				if(iB % 100 == 0) and (epoch%1==0):
+					print('[E%03d]'%(epoch)+'  G_loss :  %.6f '%(G_loss.data[0])+'  D_loss :  %.6f = %.6f + %.6f'%(D_loss.data[0], D_fake_loss.data[0], D_real_loss.data[0]))
+					#self.visualize_results(epoch, z_, img_, iB)
+					#self.G.train()
 
+			self.visualize_results(epoch, self.z)
 			#---check train result ----#
 			self.train_hist['per_epoch_time'].append(time.time()-epoch_start_time)
 			utils.loss_plot(self.train_hist, os.path.join(self.result_dir, self.dataset, self.model_name), self.model_name)
@@ -220,7 +259,7 @@ class WGAN(object):
 
 
 
-	def visualize_results(self, epoch, z_, y, iB, fix=True):
+	def visualize_results(self, epoch, z_, fix=True):
 		self.G.eval()
 		if not os.path.exists(self.result_dir + '/' + self.dataset + '/' + self.model_name):
 			os.makedirs(self.result_dir + '/' + self.dataset + '/' + self.model_name)
@@ -234,13 +273,13 @@ class WGAN(object):
 		
 		if self.gpu_mode:
 			samples = samples.cpu().data.numpy().transpose(0, 2, 3, 1)
-			gt = y.cpu().data.numpy().transpose(0, 2, 3, 1)
+			#gt = y.cpu().data.numpy().transpose(0, 2, 3, 1)
 		else:
 			samples = samples.data.numpy().transpose(0, 2, 3, 1)
-			gt = y.data.numpy().transpose(0, 2, 3, 1)
+			#gt = y.data.numpy().transpose(0, 2, 3, 1)
 
-		utils.save_images(samples[:image_frame_dim*image_frame_dim,:,:,:], [image_frame_dim, image_frame_dim], self.result_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_epoch%03d'%epoch+'_I%03d'%iB+'_F.png')
-		utils.save_images(gt[:image_frame_dim*image_frame_dim,:,:,:], [image_frame_dim, image_frame_dim], self.result_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_epoch%03d'%epoch+'_I%03d'%iB+'_R.png')
+		utils.save_images(samples[:image_frame_dim*image_frame_dim,:,:,:], [image_frame_dim, image_frame_dim], self.result_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_epoch%03d'%epoch+'_F.png')
+		#utils.save_images(gt[:image_frame_dim*image_frame_dim,:,:,:], [image_frame_dim, image_frame_dim], self.result_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_epoch%03d'%epoch+'_I%03d'%iB+'_R.png')
 
 
 	def save(self):

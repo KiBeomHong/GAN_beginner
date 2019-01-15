@@ -61,146 +61,36 @@ def load_mnist(dataset, dataroot_dir = './data'):
 	return x , y_vec
 
 
-def CustomDataLoader(path, transform, batch_size, shuffle):
-	dset = datasets.ImageFolder(path, transform)
-	data_loader = torch.utils.data.DataLoader(dset, batch_size, shuffle)
-
-	return data_loader
-
-
-class CelebA(Dataset):
-	def __init__(self, root_dir, transform = None, _type = None):
-		self.filenames = []
-		self.root_dir = root_dir
-		self.transform = transform
-		self.type = _type
-		cnt = 15000
-
-
-		print('Loadiong CelebA metatdata...')
-		sys.stdout.flush()
-		time_start = time.time()
-		
-		fname_cache = 'CelebA_cache.txt'
-		if os.path.exists(fname_cache):
-			self.filenames = open(fname_cache).read().splitlines()
-			print('Already cache file exists! Load from here ....')
-		else:
-			path = os.path.join(root_dir)
-
-			self.filenames = [os.path.join(dirpath,f) for(dirpath, dirnames, files)in os.walk(path) for f in files if f.endswith('.jpg')][:5000]
-
-			#self.filenames = self.filenames[:cnt]
-			print('=====Making cache_file.txt=======')
-			with open(fname_cache, 'w') as f:
-				for fname in self.filenames:
-					f.write(fname+'\n')
-			print('Done! cached in {}'.format(fname_cache))
-
-	def __len__(self):
-		return len(self.filenames)
-
-
-	def __getitem__(self, idx):
-		filename = self.filenames[idx]
-		image = Image.open(filename)
-		image = image.convert('RGB')
-		image = self.transform(image)
-		return image
-
-
-class CUB(Dataset):
-	def __init__(self, root_dir, transform=None, _type=None):
-		self.filenames = []
-		self.root_dir = root_dir
-		self.transform = transform
-		self.type = _type
-
-		print('Loading CUB metadata...')
-		sys.stdout.flush()
-		time_start = time.time()
-
-		fname_cache = 'CUB_cache.txt'
-		if os.path.exists(fname_cache):
-			self.filenames = open(fname_cache).read().splitlines()
-			print('Already cache file exists! Load from here ....')
-		else:
-			path = os.path.join(self.root_dir)
-			self.filenames = [os.path.join(dirpath, f) for (dirpath, dirnames, files) in os.walk(path) for f in files if f.endswith('.jpg')]
-
-			print('======Making cache_file.txt=======')
-			with open(fname_cache, 'w') as f:
-				for fname in self.filenames:
-					f.write(fname+'\n')
-			print('Done! cached in {}'.format(fname_cache))
-		
-	def __len__(self):
-		return len(self.filenames)
-
-	def __getitem__(self, idx):
-		filenames = self.filenames[idx]
-		image = Image.open(filenames).convert('RGB')
-		if self.transform:
-			image = self.transform(image)
-		return image
-
-class ImageNet(Dataset):
-	def __init__(self, root_dir, transform = None, _type = None, num_cls = None):
-		self.filenames = []
-		self.root_dir = root_dir#../../../ImageNet/ILSVRC/Data/Det
-		self.transform = transform
-		self.type = _type
-		self.num_cls = num_cls+1
-
-		print('Loading ImageNet metadata...')
-		sys.stdout.flush()
-		time_start = time.time()
-
-		#make cache text file
-		fname_cache = 'ImageNet_cache.txt'
-		if os.path.exists(fname_cache):
-			self.filenames = open(fname_cache).read().splitlines()
-			print('Already cache file exists! Load from here...')
-		else:
-			if self.type == 'train':
-				path = os.path.join(root_dir, self.type,'ILSVRC2013_train')
-			else:
-				path = os.path.join(root_dir, self.type)
-			
-			self.filenames = [ os.path.join(dirpath,f) for _,( dirpath, dirnames,files) in zip(range(self.num_cls), os.walk(path)) for f in files if f.endswith('.JPEG')]
-			print('---Making cache_file.txt----')
-
-			with open(fname_cache, 'w') as f:
-				for fname in self.filenames:
-					f.write(fname+'\n')
-			print('Done! cached in {}'.format(fname_cache))
 
 
 
-		#get ImageNet file path
-		self.cls = sorted(set( [os.path.basename(f).split('_')[0] for f in self.filenames]))
-		self.cls_map = {}
-		for i, cls in enumerate(self.cls):
-			self.cls_map[cls] = i	
-		print('Loading ImageNet done!')
 
-		
-	
-	def __len__(self):
-		return len(self.filenames)
 
-	def __getitem__(self, idx):
-		#load image
-		filename = self.filenames[idx]
-		image = Image.open(filename)
-		image = image.convert('RGB')
-		cls_ = os.path.basename(filename).split('_')[0]
-		if self.transform:
-			image = self.transform(image)
 
-		cls = self.cls_map[cls_]
-		
-		return image, cls
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def print_network(net):
