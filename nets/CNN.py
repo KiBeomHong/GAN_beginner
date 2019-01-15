@@ -34,7 +34,7 @@ class Net(nn.Module):
 			nn.ReLU(),
 
 			nn.Linear(500,10),
-			#nn.Sigmoid(),
+			nn.Sigmoid(),
 		)
 	
 		utils.initialize_weights(self)
@@ -113,16 +113,13 @@ class CNN(object):
 			for iB, (img_, label_) in enumerate(self.train_loader):
 				if iB == self.train_loader.dataset.__len__() // self.batch_size:
 					break
-
-
 					
 				if self.gpu_mode:
 					label, img_ = Variable(label_.cuda()), Variable(img_.cuda())
 				else:
 					label, img_ = Variable(label_), Variable(img_)
 			
-
-				#----Update D_network----#
+				#----Update cnn_network----#
 				self.optimizer.zero_grad()
 
 				output = self.net(img_)
