@@ -83,7 +83,7 @@ class Dis(nn.Module):
 		return x
 
 
-class GAN(object):
+class DiracGAN(object):
 	def __init__(self, args):
 
 		#parameters
@@ -101,7 +101,7 @@ class GAN(object):
 		self.beta2 = args.beta2
 		self.lrG = args.lrG
 		self.lrD = args.lrD
-		self.resl = 32
+		self.resl = 64
 
 
 		#load dataset	
@@ -177,15 +177,18 @@ class GAN(object):
 
 				#----Update D_network----#
 				self.D_optimizer.zero_grad()
+				img_.requires_grad_()
 
 				D_real = self.D(img_)
 				D_real_loss = self.BCE_loss(D_real, self.y_real_)
+				D_real_reg = 10 * self.compute_grad2(D_real, img_).mean()
 					
 				G_ = self.G(z_)
 				D_fake = self.D(G_)
 				D_fake_loss = self.BCE_loss(D_fake, self.y_fake_)
+				D_fake_reg = 10 * self.compute_grad2(D_fake, G_).mean()
 
-				D_loss = D_fake_loss + D_real_loss
+				D_loss = D_fake_loss + D_real_loss + D_fake_reg + D_real_reg
 
 				self.train_hist['D_loss'].append(D_loss.data[0])
 				D_loss.backward()
@@ -197,23 +200,23 @@ class GAN(object):
 
 				if D_acc < 0.8:
 					self.D_optimizer.step()		
-				# ***only for train very well***#		
+				# ***only for train very well***#	
 		
 				#----Update G_network----#
-				for itr in range(3):
-					self.G_optimizer.zero_grad()	
-					G_ = self.G(z_)
-					D_fake = self.D(G_)
-					G_loss = self.BCE_loss(D_fake, self.y_real_)
-					if itr%3 ==0:	
-						self.train_hist['G_loss'].append(G_loss.data[0])
-					G_loss.backward()
-					self.G_optimizer.step()
+
+				self.G_optimizer.zero_grad()	
+				G_ = self.G(z_)
+				D_fake = self.D(G_)
+				G_loss = self.BCE_loss(D_fake, self.y_real_)
+
+				self.train_hist['G_loss'].append(G_loss.data[0])
+				G_loss.backward()
+				self.G_optimizer.step()
 
 				#---check train result ----#
 				if(iB % 100 == 0) and (epoch%1==0):
 					print('[E%03d]'%(epoch)+'  G_loss :  %.6f '%(G_loss.data[0])+'  D_loss :  %.6f = %.6f + %.6f'%(D_loss.data[0], D_fake_loss.data[0], D_real_loss.data[0]))
-					self.visualize_results(epoch, z_, img_)
+					self.visualize_results(epoch, z_)
 					self.G.train()
 			
 			#self.visualize_results(epoch, self.z)
@@ -227,7 +230,7 @@ class GAN(object):
 
 
 
-	def visualize_results(self, epoch, z_, y, fix=True):
+	def visualize_results(self, epoch, z_, fix=True):
 		self.G.eval()
 		if not os.path.exists(self.result_dir + '/' + self.dataset + '/' + self.model_name):
 			os.makedirs(self.result_dir + '/' + self.dataset + '/' + self.model_name)
@@ -241,13 +244,13 @@ class GAN(object):
 		
 		if self.gpu_mode:
 			samples = samples.cpu().data.numpy().transpose(0, 2, 3, 1)
-			gt = y.cpu().data.numpy().transpose(0, 2, 3, 1)
+			#gt = y.cpu().data.numpy().transpose(0, 2, 3, 1)
 		else:
 			samples = samples.data.numpy().transpose(0, 2, 3, 1)
-			gt = y.data.numpy().transpose(0, 2, 3, 1)
+			#gt = y.data.numpy().transpose(0, 2, 3, 1)
 
 		utils.save_images(samples[:image_frame_dim*image_frame_dim,:,:,:], [image_frame_dim, image_frame_dim], self.result_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_epoch%03d'%epoch+'_F.png')
-		utils.save_images(gt[:image_frame_dim*image_frame_dim,:,:,:], [image_frame_dim, image_frame_dim], self.result_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_epoch%03d'%epoch+'_R.png')
+		#utils.save_images(gt[:image_frame_dim*image_frame_dim,:,:,:], [image_frame_dim, image_frame_dim], self.result_dir+'/'+self.dataset+'/'+self.model_name+'/'+self.model_name+'_epoch%03d'%epoch+'_I%03d'%iB+'_R.png')
 
 
 	def save(self):
@@ -271,3 +274,11 @@ class GAN(object):
 		self.GRU.load_state_dict(torch.load(os.path.join(save_dir, self.model_name + '_GRU.pkl')))
 
 
+	def compute_grad2(self, d_out, x_in):
+		batch_size = x_in.size(0)
+		grad_dout = autograd.grad(outputs=d_out.sum(), inputs=x_in, create_graph=True, retain_graph = True, only_inputs = True, allow_unused=True)[0]
+		grad_dout2 = grad_dout.pow(2)
+		assesrt(grad_dout2.size()==x_in.size())
+		reg = grad_dout2.view(batch_size, -1).sum(1)
+
+		return reg

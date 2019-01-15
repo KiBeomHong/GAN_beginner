@@ -37,15 +37,9 @@ class Gen(nn.Module):
 
 			#16 -> 32
 			nn.Upsample(scale_factor=2, mode='nearest'),
-			nn.Conv2d(64, 32, 3, 1, 1, bias=False),
-			nn.BatchNorm2d(32),
-			nn.ReLU(),
-
-			#32 -> 64
-			nn.Upsample(scale_factor=2, mode='nearest'),
-			nn.Conv2d(32, self.output_dim, 3, 1, 1, bias=False),
+			nn.Conv2d(64, self.output_dim, 3, 1, 1, bias=False),
 			nn.Sigmoid(),
-
+			
 		)
 	
 		utils.initialize_weights(self)
@@ -55,8 +49,6 @@ class Gen(nn.Module):
 		x = self.deconv(x)
 		return x
 
-
-
 class Dis(nn.Module):
 	def __init__(self, input_dim):
 		super(Dis, self).__init__()
@@ -64,41 +56,29 @@ class Dis(nn.Module):
 		self.output_dim  = 1 # Real or Fake
 
 		self.conv = nn.Sequential(
-			# 64 -> 32
-			nn.Conv2d(self.input_dim, 32, 4, 2, 1, bias=False),
-			nn.BatchNorm2d(32),
-			nn.LeakyReLU(0.2),
-
 			# 32 ->16
-			nn.Conv2d(32, 64, 4, 2, 1, bias=False),
+			nn.Conv2d(self.input_dim, 64, 4, 2, 1, bias=False),
 			nn.BatchNorm2d(64),
 			nn.LeakyReLU(0.2),
-
-			# 16 -> 8
-			nn.Conv2d(64, 128, 4, 2, 1, bias=False),
-			nn.BatchNorm2d(128),
-			nn.LeakyReLU(0.2),
-
-			# 8 -> 4 : So output is 256*4*4
-			nn.Conv2d(128, 256, 4, 2, 1, bias=False),
-			nn.BatchNorm2d(256),
-			nn.LeakyReLU(0.2),
-
 		)
 
 		self.fc = nn.Sequential(
-			nn.Linear(256*4*4, 1024),
-			nn.BatchNorm1d(1024),
+			nn.Linear(64*16*16, 512),
+			nn.BatchNorm1d(512),
 			nn.LeakyReLU(0.2),
-			nn.Linear(1024, self.output_dim),
+
+			nn.Linear(512, 256),
+			nn.BatchNorm1d(256),
+			nn.LeakyReLU(0.2),
+
+			nn.Linear(256, self.output_dim),
 			nn.Sigmoid(),
 		)
 	
 	def forward(self, input):
 		x = self.conv(input)
-		x = x.view(-1, 256*4*4)
-		x = self.fc(x)
-
+		x = self.fc(x.view(-1,64*16*16))
+		x = x.view(x.size(0))
 		return x
 
 
@@ -127,7 +107,7 @@ class WGAN(object):
 		self.use_gp = True # True : WGAN_GP / False: WGAN
 
 		#load dataset	
-		transform = transforms.Compose([transforms.Resize(self.resl),transforms.ToTensor(),transforms.Normalize((0.1307,),(0.3081,))])
+		transform = transforms.Compose([transforms.Resize(self.resl),transforms.ToTensor()])
 
 		if not os.path.exists(os.path.join(self.dataroot_dir,self.dataset)):
 			os.makedirs(os.path.join(self.dataroot_dir,self.dataset))
@@ -232,12 +212,12 @@ class WGAN(object):
 				
 
 				#---Update G_network---#
+
 				self.G_optimizer.zero_grad()	
 				G_ = self.G(z_)
 				D_fake = self.D(G_)
 				
-				G_loss = -torch.mean(D_fake)
-				
+				G_loss = -torch.mean(D_fake)					
 				self.train_hist['G_loss'].append(G_loss.data[0])
 				
 				G_loss.backward()
