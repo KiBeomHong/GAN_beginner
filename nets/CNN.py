@@ -125,14 +125,14 @@ class CNN(object):
 				output = self.net(img_)
 				loss = self.CE_loss(output, label)
 
-				self.train_hist['G_loss'].append(loss.data[0])
+				self.train_hist['G_loss'].append(loss.item())
 				loss.backward()
 
 				self.optimizer.step()
 
 				#---check train result ----#
 				if(iB % 100 == 0) and (epoch%1==0):
-					print('[E%03d]'%(epoch)+'  loss :  %.6f '%(loss.data[0]))
+					print('[E%03d]'%(epoch)+'  loss :  %.6f '%(loss.item()))
 					
 			
 			#self.visualize_results(epoch, self.z)

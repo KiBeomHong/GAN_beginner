@@ -138,7 +138,7 @@ class WGAN(object):
 			self.D = self.D.cuda()
 			self.BCE_loss = nn.BCELoss().cuda() #BCELoss : Binary Cross Entropy Loss
 		else:
-			self.BCE_loss = nn.BECLoss()
+			self.BCE_loss = nn.BCELoss()
 
 	def train(self):
 		self.train_hist = {}
@@ -206,9 +206,18 @@ class WGAN(object):
 				else:
 					D_loss = D_fake_loss + D_real_loss
 
-				self.train_hist['D_loss'].append(D_loss.data[0])
+				self.train_hist['D_loss'].append(D_loss.item())
 				D_loss.backward()
-				self.D_optimizer.step()
+
+				# ***only for train very well***#
+				num_real_correct = torch.sum(D_real > 0.5)
+				num_fake_correct = torch.sum(D_fake < 0.5)
+				D_acc = float(num_real_correct.item() + num_fake_correct.item()) / (self.batch_size*2)
+
+				if D_acc < 0.8:
+					self.D_optimizer.step()		
+				# ***only for train very well***#
+
 				
 				#----Update G_network----#
 				for itr in range(3):
@@ -217,14 +226,14 @@ class WGAN(object):
 					D_fake = self.D(G_)
 					G_loss = self.BCE_loss(D_fake, self.y_real_)
 					if itr%3 ==0:	
-						self.train_hist['G_loss'].append(G_loss.data[0])
+						self.train_hist['G_loss'].append(G_loss.item())
 					G_loss.backward()
 					self.G_optimizer.step()
 
 
 				#---check train result ----#
 				if(iB % 100 == 0) and (epoch%1==0):
-					print('[E%03d]'%(epoch)+'  G_loss :  %.6f '%(G_loss.data[0])+'  D_loss :  %.6f = %.6f + %.6f'%(D_loss.data[0], D_fake_loss.data[0], D_real_loss.data[0]))
+					print('[E%03d]'%(epoch)+'  G_loss :  %.6f '%(G_loss.item())+'  D_loss :  %.6f = %.6f + %.6f'%(D_loss.item(), D_fake_loss.item(), D_real_loss.item()))
 					self.visualize_results(epoch, z_, img_)
 					self.G.train()
 
